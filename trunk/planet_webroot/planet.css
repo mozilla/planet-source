@@ -1,6 +1,7 @@
 body {
      font-family: sans-serif;
      background: #fff url("body_back.gif") repeat-x;
+     color: #000;
      margin: 15px;
 }
 
