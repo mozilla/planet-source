@@ -53,9 +53,7 @@
 <h4><a href="<TMPL_VAR link ESCAPE="HTML">"><TMPL_VAR title></a></h4>
 </TMPL_IF>
 <div class="entry">
-<p>
 <TMPL_VAR content>
-</p>
 <p class="date">
 <a href="<TMPL_VAR link ESCAPE="HTML">"><TMPL_IF creator>by <TMPL_VAR creator> at </TMPL_IF><TMPL_VAR date></a>
 </p>
@@ -97,7 +95,7 @@ else
 document.write(days, " days, ",
 	   hours%24, " hours, ", minutes%60, " minutes<br>",
 	   then.toLocaleString());
-document.write("</dd>");
+document.write("<\/dd>");
 }
 </script>
 
@@ -163,8 +161,8 @@ document.write("</dd>");
     <li><a href="http://mozillazine.org/">MozillaZine.org</a></li>
     <li><a href="http://mozilla.org/get-involved.html">Get Involved!</a></li>
    </ul>
-   <p>Maintained by <a href="https://bugzilla.mozilla.org/enter_bug.cgi?product=Websites&component=planet.mozilla.org">mozilla.org</a>, powered by <a href="http://www.planetplanet.org/">Planet Planet</a></p>
-
+   <p>Maintained by <a href="https://bugzilla.mozilla.org/enter_bug.cgi?product=Websites&amp;component=planet.mozilla.org">mozilla.org</a>, powered by <a href="http://www.planetplanet.org/">Planet Planet</a></p>
+  </div>
 </body>
 
 </html>
