@@ -64,6 +64,7 @@ img.face {
 
 div.entry {
         margin: 0 0.5em 1em 1em;
+		padding-top: 1em;
 }
 
 div.entry p:first-child {
