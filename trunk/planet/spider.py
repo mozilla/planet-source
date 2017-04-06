@@ -103,7 +103,6 @@ def writeCache(feed_uri, feed_info, data):
             log.info("Feed %s unchanged", feed_uri)
         else:
             log.info("Feed %s unchanged @ %s", feed_uri, data.url)
-
         if not feed_info.feed.has_key('planet_message'):
             if feed_info.feed.has_key('planet_updated'):
                 updated = feed_info.feed.planet_updated
@@ -137,10 +136,9 @@ def writeCache(feed_uri, feed_info, data):
         if data.has_key('etag') and data.etag:
             data.feed['planet_http_etag'] = data.etag
         elif data.headers.has_key('etag') and data.headers['etag']:
-            data.feed['planet_http_etag'] =  data.headers['etag']
-
+            data.feed['planet_http_etag'] = data.headers['etag']
         if data.headers.has_key('last-modified'):
-            data.feed['planet_http_last_modified']=data.headers['last-modified']
+            data.feed['planet_http_last_modified'] = data.headers['last-modified']
         elif data.has_key('modified') and data.modified:
             data.feed['planet_http_last_modified'] = time.asctime(data.modified)
 
@@ -195,7 +193,6 @@ def writeCache(feed_uri, feed_info, data):
 
         # compute blacklist file name based on the id
         blacklist_file = filename(blacklist, entry.id)  
-
         # check if blacklist file exists. If so, skip it. 
         if os.path.exists(blacklist_file):
            continue
@@ -247,6 +244,7 @@ def writeCache(feed_uri, feed_info, data):
 
     if index: index.close()
 
+    print config.activity_threshold(feed_uri)
     # identify inactive feeds
     if config.activity_threshold(feed_uri):
         updated = [entry.updated_parsed for entry in data.entries
@@ -290,11 +288,55 @@ def writeCache(feed_uri, feed_info, data):
     write(xdoc.toxml().encode('utf-8'), filename(sources, feed_uri))
     xdoc.unlink()
 
-def httpThread(thread_index, input_queue, output_queue, log):
-    import httplib2
-    from httplib import BadStatusLine
 
-    h = httplib2.Http(config.http_cache_directory())
+def fakeResponse(req):
+    """ Replacing httplib2 with Requests without rewriting the planet (har har)
+        means that we need to assemble a fake Response object out of the header set
+        returned by a Request. Shenanigans ahead. """
+
+    import httplib2 
+    info = dict()
+    info['status'] = 200
+    fake = httplib2.Response(info)
+
+    
+    for keys in req.headers:
+        setattr(fake, str(keys).lower(), req.headers[keys])
+
+    # We're handling the status like this because httplib2 expects an int there,
+    # but some web servers will hand you "200 OK" instead of 200, and Requests 
+    # doesn't always do the right thing.
+
+    fake.status    = int(str(req.status_code).split(' ')[0])
+
+    # fromcache and versions have no equivalent in Requests that I can see, so
+    # we're just going to lie about it. Per the docs, "11" means "HTTP/1.1",
+    # so, this might conceivably break something in a future HTTP2-friendly world.
+
+    fake.fromcache = False
+    fake.version   = '11'    
+    fake.reason    = req.reason  
+
+    if req.history :
+        fake.previous = (req.history[-2]).url
+    else:
+        fake.previous = req.url
+
+    setattr(fake, 'content-location', req.url)
+
+    # This is particular to Planet's in-house caching sytem.
+    fake['-content-hash'] =  ''
+
+    return fake
+
+def httpThread(thread_index, input_queue, output_queue, log):
+
+    import requests
+    from cachecontrol import CacheControl
+    from cachecontrol.caches.file_cache import FileCache
+
+    cached_session = CacheControl(requests.session(), cache=FileCache(config.http_cache_directory()))
+
     uri, feed_info = input_queue.get(block=True)
     while uri:
         log.info("Fetching %s via %d", uri, thread_index)
@@ -324,8 +366,10 @@ def httpThread(thread_index, input_queue, output_queue, log):
 
             headers['User-Agent'] = 'venus'
 
-            # issue request
-            (resp, content) = h.request(idna, 'GET', headers=headers)
+            c_req = cached_session.get(idna, headers=headers, verify=True)
+            content = c_req.content
+         
+            resp = fakeResponse(c_req)
 
             # unchanged detection
             resp['-content-hash'] = md5(content or '').hexdigest()
@@ -343,17 +387,24 @@ def httpThread(thread_index, input_queue, output_queue, log):
             if resp.has_key('content-encoding'):
                 del resp['content-encoding']
             setattr(feed, 'headers', resp)
-        except BadStatusLine:
-            log.error("Bad Status Line received for %s via %d",
-                uri, thread_index)
-        except httplib2.HttpLib2Error, e:
-            log.error("HttpLib2Error: %s via %d", str(e), thread_index)
+
+
+        except requests.HTTPError, e:
+            log.error("HTTP error when requesting %s: %s", uri, e)
+        except requests.ConnectionError, e:
+            log.error("Connection Error when requesting %s", uri)
+        except requests.Timeout, e:
+            log.error("Timeout error: %s", uri)
+        except requests.RequestException, e:
+            log.error("An ambiguous exception occured while requesting %s in thread %d: %s.",
+                uri, thread_index, e)
+            
         except socket.error, e:
             if e.__class__.__name__.lower()=='timeout':
                 feed.headers['status'] = '408'
                 log.warn("Timeout in thread-%d", thread_index)
             else:
-                log.error("HTTP Error: %s in thread-%d", str(e), thread_index)
+                logierror("HTTP Error: %s in thread-%d", str(e), thread_index)
         except Exception, e:
             import sys, traceback
             type, value, tb = sys.exc_info()

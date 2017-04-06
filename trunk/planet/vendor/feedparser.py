@@ -3467,7 +3467,7 @@ def parse(url_file_stream_or_string, etag=None, modified=None, agent=None, refer
     if hasattr(f, 'status'):
         result['status'] = f.status
     if hasattr(f, 'headers'):
-        result['headers'] = f.headers.dict
+        result['headers'] = dict(f.headers)
     if hasattr(f, 'close'):
         f.close()
 
