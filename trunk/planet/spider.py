@@ -363,8 +363,7 @@ def httpThread(thread_index, input_queue, output_queue, log):
                     feed_info.feed['planet_http_last_modified']
 
             headers['User-Agent'] = 'venus'
-
-            c_req = cached_session.get(idna, headers=headers, verify=True)
+            c_req = cached_session.get(idna, headers=headers, verify=True, timeout=30)
             content = c_req.content
          
             resp = fakeResponse(c_req)
